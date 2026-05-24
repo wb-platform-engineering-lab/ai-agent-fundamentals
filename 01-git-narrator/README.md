@@ -206,18 +206,106 @@ After receiving the tool result, Claude now has everything it needs and returns 
 
 ## Run it
 
+### Prerequisites
+
+- Python 3.10+ (the agent uses `match` statements)
+- An Anthropic API key ([get one here](https://console.anthropic.com/))
+- A git repository with at least one commit (needed for `get_commit_history`)
+
+Install the dependency:
+
+```bash
+pip install anthropic
+```
+
+Export your API key (or prefix every `python` command with it):
+
+```bash
+export ANTHROPIC_API_KEY=your_key_here
+```
+
+---
+
+### Option A — Run against your own staged changes
+
+This is the real use-case. Stage any change in any git repo, then run the agent:
+
 ```bash
 cd 01-git-narrator
 
-# Stage some changes in any git repo
+# 1. Make a change in your repo and stage it
 git add some_file.py
 
-# Run the agent
-ANTHROPIC_API_KEY=your_key python agent.py
+# 2. Run the agent from the same directory
+python agent.py
+```
 
-# Or use the demo script (creates fake changes to show the flow)
+The agent will:
+1. Call `run_git_diff` → reads your staged diff via `git diff --staged`
+2. Call `get_commit_history` → reads recent commits to match your style
+3. Return a conventional commit message, PR description, and changelog entry
+
+Expected output:
+
+```
+git-narrator — AI commit message generator
+─────────────────────────────────────────────
+Analyzing staged changes...
+
+  → calling tool: run_git_diff({})
+  → calling tool: get_commit_history({'count': 5})
+
+**Commit message:**
+feat(auth): add JWT refresh token rotation
+
+**PR description:**
+## What
+Implements refresh token rotation in `auth.py`. Each login invalidates
+the previous refresh token and issues a new one, preventing token reuse.
+
+## Why
+Mitigates session hijacking risk when a refresh token is leaked.
+
+**Changelog:**
+- feat: JWT refresh token rotation (auth-service)
+```
+
+> **Note:** If there are no staged changes, `run_git_diff` returns `"No staged changes found."` and Claude will tell you there is nothing to summarize. Always run `git add` first.
+
+---
+
+### Option B — Run the demo script
+
+If you don't have changes to stage, `run.sh` creates a fake Python file, stages it, runs the agent, then cleans up:
+
+```bash
+cd 01-git-narrator
 bash run.sh
 ```
+
+What the script does step by step:
+1. Checks you're inside a git repository (exits with a clear error if not)
+2. Writes a small `demo_auth.py` file with a `rotate_refresh_token` function
+3. Stages it with `git add demo_auth.py`
+4. Runs `python agent.py` — you see the full tool-call loop
+5. Unstages and deletes `demo_auth.py` so your repo stays clean
+
+> **Tip:** If you're not in a git repo yet, initialize one first:
+> ```bash
+> git init && git commit --allow-empty -m "initial commit"
+> ```
+
+---
+
+### Troubleshooting
+
+| Symptom | Likely cause | Fix |
+|---|---|---|
+| `AuthenticationError` | API key missing or wrong | Check `echo $ANTHROPIC_API_KEY` |
+| `SyntaxError` on `match` | Python < 3.10 | Run `python3 --version`, upgrade if needed |
+| `No staged changes found` | Nothing staged | Run `git add <file>` first |
+| `git error: ...` | Not in a git repo | `cd` into a repo or run `git init` |
+| `ModuleNotFoundError: anthropic` | Package not installed | `pip install anthropic` |
 
 ---
 
