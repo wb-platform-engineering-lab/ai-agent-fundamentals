@@ -45,20 +45,52 @@ flowchart LR
 
 ---
 
-## Prerequisites
+## Getting started
+
+### 1. Clone the repo
 
 ```bash
-python 3.11+
+git clone https://github.com/wb-platform-engineering-lab/ai-agent-fundamentals.git
+cd ai-agent-fundamentals
+```
+
+### 2. Create a virtual environment
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate        # macOS / Linux
+# .venv\Scripts\activate         # Windows
+```
+
+### 3. Install dependencies
+
+```bash
 pip install anthropic chromadb python-dotenv rich
 ```
 
-You need an Anthropic API key. Get one at console.anthropic.com.
+### 4. Set your API key
+
+Get a key at [console.anthropic.com](https://console.anthropic.com), then:
+
+```bash
+cp .env.example .env
+# open .env and paste your key
+```
+
+Or export it directly:
 
 ```bash
 export ANTHROPIC_API_KEY=sk-ant-...
 ```
 
-Projects 02 and 04 use ChromaDB for local vector storage — no external services needed.
+### 5. Run your first project
+
+```bash
+cd 01-git-narrator
+python3 agent.py
+```
+
+> Projects 02 and 04 require ChromaDB — already included in the pip install above. No external services needed.
 
 ---
 
