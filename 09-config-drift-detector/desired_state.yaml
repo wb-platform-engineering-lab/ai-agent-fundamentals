@@ -1,0 +1,36 @@
+# desired_state.yaml — what SHOULD exist in production
+services:
+  payments-service:
+    replicas: 3
+    image: payments-service:v2.1.0
+    env:
+      DB_POOL_SIZE: "20"
+      LOG_LEVEL: info
+    resources:
+      cpu_limit: "500m"
+      memory_limit: "512Mi"
+
+  auth-service:
+    replicas: 2
+    image: auth-service:v1.4.2
+    env:
+      JWT_EXPIRY: "3600"
+      LOG_LEVEL: info
+    resources:
+      cpu_limit: "250m"
+      memory_limit: "256Mi"
+
+  api-gateway:
+    replicas: 2
+    image: api-gateway:v3.0.1
+    env:
+      RATE_LIMIT: "1000"
+      LOG_LEVEL: warn
+    resources:
+      cpu_limit: "1000m"
+      memory_limit: "1Gi"
+
+feature_flags:
+  new_checkout_flow: false
+  dark_mode: true
+  beta_api: false

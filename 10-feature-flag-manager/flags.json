@@ -1,0 +1,34 @@
+{
+  "flags": {
+    "new-checkout-flow": {
+      "state": "canary",
+      "description": "Redesigned checkout UX with fewer steps",
+      "created_at": "2026-05-20T09:00:00Z",
+      "updated_at": "2026-05-22T14:30:00Z",
+      "history": [
+        {"from": "draft", "to": "canary", "at": "2026-05-22T14:30:00Z"}
+      ]
+    },
+    "dark-mode": {
+      "state": "ga",
+      "description": "Dark mode theme for the dashboard",
+      "created_at": "2026-04-01T10:00:00Z",
+      "updated_at": "2026-05-01T11:00:00Z",
+      "history": [
+        {"from": "draft", "to": "canary", "at": "2026-04-05T10:00:00Z"},
+        {"from": "canary", "to": "rollout", "at": "2026-04-15T10:00:00Z"},
+        {"from": "rollout", "to": "ga", "at": "2026-05-01T11:00:00Z"}
+      ]
+    },
+    "legacy-auth": {
+      "state": "rollout",
+      "description": "Old OAuth1 authentication flow",
+      "created_at": "2026-01-15T08:00:00Z",
+      "updated_at": "2026-05-10T16:00:00Z",
+      "history": [
+        {"from": "draft", "to": "canary", "at": "2026-01-20T08:00:00Z"},
+        {"from": "canary", "to": "rollout", "at": "2026-05-10T16:00:00Z"}
+      ]
+    }
+  }
+}

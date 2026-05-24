@@ -1,0 +1,12 @@
+{
+  "_comment": "Add the 'git-tools' entry to your Claude Desktop config.",
+  "_location": "~/Library/Application Support/Claude/claude_desktop_config.json (macOS)",
+  "_location_windows": "%APPDATA%\\Claude\\claude_desktop_config.json",
+  "mcpServers": {
+    "git-tools": {
+      "command": "python3",
+      "args": ["/ABSOLUTE/PATH/TO/11-mcp-server/server.py"],
+      "_note": "Replace /ABSOLUTE/PATH/TO/ with your actual path"
+    }
+  }
+}
