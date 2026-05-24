@@ -28,7 +28,7 @@ def rotate_refresh_token(user_id: str) -> str:
 EOF
 
 cp /tmp/demo_auth.py ./demo_auth.py
-git add demo_auth.py
+git add -f demo_auth.py
 
 echo "Staged file: demo_auth.py (JWT refresh token rotation)"
 echo ""
