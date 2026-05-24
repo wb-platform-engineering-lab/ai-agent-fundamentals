@@ -34,7 +34,7 @@ echo "Staged file: demo_auth.py (JWT refresh token rotation)"
 echo ""
 
 # Run the agent
-python agent.py
+python3 agent.py
 
 # Cleanup
 git restore --staged demo_auth.py

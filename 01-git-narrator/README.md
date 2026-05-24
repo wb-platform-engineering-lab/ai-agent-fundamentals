@@ -12,7 +12,7 @@ An agent that reads your staged git changes and automatically writes:
 - A one-line changelog entry
 
 ```bash
-$ python agent.py
+$ python3 agent.py
 ✔ Reading staged changes...
 ✔ Generating commit message...
 
@@ -212,11 +212,15 @@ After receiving the tool result, Claude now has everything it needs and returns 
 - An Anthropic API key ([get one here](https://console.anthropic.com/))
 - A git repository with at least one commit (needed for `get_commit_history`)
 
-Install the dependency:
+Create a virtual environment and install the dependency:
 
 ```bash
+python3 -m venv .venv
+source .venv/bin/activate
 pip install anthropic
 ```
+
+> The `.venv/` directory is git-ignored. Next time you open a new terminal, reactivate with `source .venv/bin/activate` before running the agent.
 
 Export your API key (or prefix every `python` command with it):
 
@@ -237,7 +241,7 @@ cd 01-git-narrator
 git add some_file.py
 
 # 2. Run the agent from the same directory
-python agent.py
+python3 agent.py
 ```
 
 The agent will:
@@ -287,7 +291,7 @@ What the script does step by step:
 1. Checks you're inside a git repository (exits with a clear error if not)
 2. Writes a small `demo_auth.py` file with a `rotate_refresh_token` function
 3. Stages it with `git add demo_auth.py`
-4. Runs `python agent.py` — you see the full tool-call loop
+4. Runs `python3 agent.py` — you see the full tool-call loop
 5. Unstages and deletes `demo_auth.py` so your repo stays clean
 
 > **Tip:** If you're not in a git repo yet, initialize one first:
@@ -305,7 +309,7 @@ What the script does step by step:
 | `SyntaxError` on `match` | Python < 3.10 | Run `python3 --version`, upgrade if needed |
 | `No staged changes found` | Nothing staged | Run `git add <file>` first |
 | `git error: ...` | Not in a git repo | `cd` into a repo or run `git init` |
-| `ModuleNotFoundError: anthropic` | Package not installed | `pip install anthropic` |
+| `ModuleNotFoundError: anthropic` | venv not active or package not installed | `source .venv/bin/activate && pip install anthropic` |
 
 ---
 
