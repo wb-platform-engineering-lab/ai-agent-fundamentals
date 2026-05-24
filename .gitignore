@@ -7,3 +7,4 @@ chroma_data/
 *.db
 *.sqlite
 .DS_Store
+demo_*.py
