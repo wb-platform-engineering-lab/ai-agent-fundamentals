@@ -578,6 +578,464 @@ mcp                      # Phase 5 only
 
 ---
 
+## Web application layer
+
+The CLI version is the agent core. The web application wraps it with a frontend so the HITL gates become UI interactions instead of `input()` calls, and the pipeline is visible at a glance.
+
+**Stack: FastAPI + HTMX + plain CSS**
+No JS framework, no build step, no Node.js. The backend is pure Python. HTMX handles interactivity via HTML attributes — partial page updates without writing JavaScript. Agents stay completely unchanged.
+
+---
+
+### Full system architecture
+
+```mermaid
+flowchart TD
+    subgraph Frontend["Frontend (HTMX + HTML)"]
+        UI_DASH["Dashboard\n/"]
+        UI_OPP["Opportunity detail\n/opportunity/:id"]
+        UI_REVIEW["Review queue\n/reviews"]
+        UI_PROFILE["Candidate profile\n/profile"]
+        UI_DIGEST["Daily digest\n/digest"]
+    end
+
+    subgraph Backend["Backend (FastAPI)"]
+        API_OPP["GET /api/opportunities\nPOST /api/opportunities/:id/transition"]
+        API_REVIEW["GET /api/reviews\nPOST /api/reviews/:id/decide"]
+        API_AGENT["POST /api/run\nGET /api/run/stream (SSE)"]
+        API_DRAFT["GET /api/drafts/:id\nPOST /api/drafts/:id/approve"]
+        API_PROFILE["GET /api/profile\nPUT /api/profile"]
+    end
+
+    subgraph Agents["Agent layer (unchanged)"]
+        ORCH["orchestrator.py"]
+        SCOUT["scout.py"]
+        RESEARCH["researcher.py"]
+        STRAT["strategist.py"]
+        WRITER["writer.py"]
+        COACH["coach.py"]
+    end
+
+    subgraph Storage["Storage"]
+        DB["SQLite\njob_search.db"]
+        RAG["ChromaDB"]
+        FILES["data/\ncandidate.yaml\nlinkedin_connections.csv"]
+    end
+
+    UI_DASH -->|"HTMX GET"| API_OPP
+    UI_REVIEW -->|"HTMX POST"| API_REVIEW
+    UI_OPP -->|"HTMX GET/POST"| API_DRAFT
+    UI_PROFILE -->|"HTMX PUT"| API_PROFILE
+    UI_DIGEST -->|"SSE stream"| API_AGENT
+
+    API_OPP --> DB
+    API_REVIEW --> DB
+    API_AGENT --> ORCH
+    API_DRAFT --> DB
+    API_PROFILE --> FILES
+
+    ORCH --> SCOUT
+    ORCH --> RESEARCH
+    ORCH --> STRAT
+    ORCH --> WRITER
+    ORCH --> COACH
+
+    SCOUT --> DB
+    RESEARCH --> DB
+    RESEARCH --> RAG
+    STRAT --> DB
+    WRITER --> DB
+    WRITER --> RAG
+    COACH --> DB
+
+    style Frontend fill:#1a3a5c,color:#fff,stroke:none
+    style Backend fill:#2d4a22,color:#fff,stroke:none
+    style Agents fill:#4a2d1a,color:#fff,stroke:none
+    style Storage fill:#1a1a2e,color:#e0e0e0,stroke:#4a9eff
+```
+
+---
+
+### The key change: HITL gates become async review requests
+
+In the CLI version, `input()` blocks the agent. In the web version, gates write a review request to the DB and return immediately. The agent continues to the next opportunity. The human reviews at their own pace via the UI.
+
+```python
+# CLI version (blocks until human responds)
+def gate_strategy_approval(opportunity_id: str) -> str:
+    answer = input("  Approve? [a/s/r]: ")
+    ...
+
+# Web version (non-blocking — saves request, returns immediately)
+def gate_strategy_approval(opportunity_id: str) -> str:
+    save_review_request(
+        opportunity_id=opportunity_id,
+        type="strategy",
+        status="pending",
+    )
+    return "Strategy review requested. Waiting for human approval via UI."
+    # Agent moves on to next opportunity
+```
+
+The UI polls `GET /api/reviews` and surfaces pending items. The human clicks approve/skip/edit. The API applies the state transition. Next time the orchestrator runs, it picks up where the human left off.
+
+---
+
+### API routes
+
+#### Opportunities
+```
+GET  /api/opportunities                     → list all, grouped by state
+GET  /api/opportunities/:id                 → single opportunity with full context
+POST /api/opportunities/:id/transition      → manual state transition (human override)
+GET  /api/opportunities/:id/research        → company research for an opportunity
+GET  /api/opportunities/:id/strategy        → strategy for an opportunity
+GET  /api/opportunities/:id/drafts          → all drafts for an opportunity
+GET  /api/opportunities/:id/history         → state transition log
+```
+
+#### Reviews (HITL queue)
+```
+GET  /api/reviews                           → all pending review requests
+GET  /api/reviews/:id                       → single review with full context
+POST /api/reviews/:id/decide                → {decision: "approve"|"skip"|"revise", notes: "..."}
+```
+
+#### Agent execution
+```
+POST /api/run                               → trigger full orchestrator run (async)
+GET  /api/run/stream                        → SSE stream of agent output during a run
+GET  /api/run/history                       → past agent run logs
+GET  /api/run/status                        → is a run currently in progress?
+```
+
+#### Drafts
+```
+GET  /api/drafts/:id                        → full draft content
+POST /api/drafts/:id/approve                → mark approved, create Gmail draft
+POST /api/drafts/:id/revise                 → {notes: "..."} → triggers Writer revision
+```
+
+#### Profile
+```
+GET  /api/profile                           → current candidate.yaml as JSON
+PUT  /api/profile                           → update profile fields
+POST /api/profile/examples                  → upload writing sample for RAG ingestion
+```
+
+#### Digest
+```
+GET  /api/digest/latest                     → latest daily digest JSON
+GET  /api/digest/stream                     → SSE stream while digest is being generated
+```
+
+---
+
+### Frontend pages
+
+#### Dashboard (`/`)
+
+The main view. Pipeline as a kanban board grouped by stage. Each card shows company, role, fit score, and days in current state. Stale opportunities (no movement in 7+ days) are highlighted.
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│  Job Search Dashboard          8 active  ·  3 pending review        │
+├──────────────┬──────────────┬──────────────┬──────────────┬─────────┤
+│  RESEARCHED  │  STRATEGY    │  APPLYING    │  INTERVIEWS  │  OFFERS │
+│              │  APPROVED    │              │              │         │
+│ ┌──────────┐ │ ┌──────────┐ │ ┌──────────┐ │ ┌──────────┐ │         │
+│ │  Stripe  │ │ │  Notion  │ │ │  Linear  │ │ │   Acme   │ │         │
+│ │Staff Eng │ │ │Eng Mgr   │ │ │Sr Eng    │ │ │Staff Eng │ │         │
+│ │ fit: 89  │ │ │fit: 76   │ │ │day 14 ⚠️ │ │ │Tue 2pm   │ │         │
+│ └──────────┘ │ └──────────┘ │ └──────────┘ │ └──────────┘ │         │
+│              │              │              │              │         │
+│ ┌──────────┐ │              │              │              │         │
+│ │  Vercel  │ │              │              │              │         │
+│ │Prin Eng  │ │              │              │              │         │
+│ │ fit: 71  │ │              │              │              │         │
+│ └──────────┘ │              │              │              │         │
+└──────────────┴──────────────┴──────────────┴──────────────┴─────────┘
+```
+
+Clicking a card opens the opportunity detail page. HTMX loads the detail panel inline without a page reload.
+
+#### Review queue (`/reviews`)
+
+The HITL inbox. Every pending approval displayed in priority order. Each item shows enough context to decide without clicking through to the detail page.
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│  Review Queue (3 pending)                                           │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│  STRATEGY APPROVAL                                    Stripe        │
+│  Staff Engineer · fit 89/100                                        │
+│  Recommendation: cold outreach via Maria Santos (2nd connection)    │
+│  Angle: distributed systems background matches their infra rewrite  │
+│  Risk: role may be on hiring freeze (no new postings in 6 weeks)    │
+│                                                                     │
+│  [Approve]  [Skip]  [Request revision ↩]                           │
+│                                                                     │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│  DRAFT REVIEW                                         Notion        │
+│  Cover letter · 342 words · Engineering Manager                     │
+│  Personalization: Series C funding, Head of Eng blog post (May 12)  │
+│                                                                     │
+│  [View full draft]  [Approve → Gmail draft]  [Edit]  [Discard]     │
+│                                                                     │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│  SKIP CONFIRMATION                                    Vercel        │
+│  Principal Engineer                                                 │
+│  Agent recommends: SKIP — Go expertise required, listed as avoid    │
+│                                                                     │
+│  [Confirm skip]  [Override — pursue anyway]                        │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+All buttons are HTMX `hx-post` calls. No page reload. The item disappears from the queue after a decision is made.
+
+#### Opportunity detail (`/opportunity/:id`)
+
+Full context for one opportunity. Tabbed layout:
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│  Stripe — Staff Engineer                                            │
+│  fit: 89/100  ·  state: strategy_approved  ·  discovered 3 days ago │
+├──────────┬──────────────┬──────────┬──────────┬────────────────────┤
+│ Overview │ Company Intel│ Strategy │  Drafts  │     History        │
+├──────────┴──────────────┴──────────┴──────────┴────────────────────┤
+│                                                                     │
+│  COMPANY INTELLIGENCE                                               │
+│  Funding: Series I · $2.2B raised · last round Jan 2026            │
+│  Headcount: 8,400 (↑12% YoY)                                       │
+│  Glassdoor: 4.2 / 5.0 (1,200 reviews)                              │
+│  Recent news: Launched Stripe Terminal 3.0 (May 2026)              │
+│  Interview process: phone screen → 2x technical → system design    │
+│                                                                     │
+│  WARM CONTACTS (from your LinkedIn export)                         │
+│  Maria Santos — Senior Engineer (2nd connection via Jake Liu)      │
+│  Tom Park — Engineering Manager (direct connection)                │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+#### Agent run page (`/digest`)
+
+Triggered manually or viewed after a scheduled run. Uses SSE to stream the agent's output in real time — the same `→ calling tool: ...` lines from the CLI, but rendered in a terminal-style panel in the browser.
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│  Agent Run · 2026-05-24 08:00                        [Run now ▶]   │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│  Phase 0: Async reconciliation                                      │
+│    Linear application — 14 days, no response → surfacing           │
+│                                                                     │
+│  Phase 1: Pending reviews (3 items) → sent to review queue         │
+│                                                                     │
+│  Phase 2: Pipeline processing                                       │
+│    → Stripe (strategy_approved)                                     │
+│      calling tool: get_strategy({opportunity_id: "opp_stripe_001"})│
+│      calling tool: search_rag({query: "cold outreach Stripe"})     │
+│      calling tool: create_gmail_draft({to: "maria@stripe.com"...}) │
+│      calling tool: save_draft({type: "cold_email", word_count: 187})│
+│      calling tool: request_human_review({type: "draft"})           │
+│    ✓ Draft created for Stripe — added to review queue              │
+│                                                                     │
+│  Phase 3: Discovery                                                 │
+│    calling tool: search_indeed_jobs({keywords: "staff engineer"...})│
+│    calling tool: search_hn_who_is_hiring({keywords: "distributed"})│
+│    Found 3 new opportunities. Researching...                        │
+│    → Researching: Render (render.com)                               │
+│    → Researching: Railway                                           │
+│                                                                     │
+│  Done. 2 new opportunities added · 1 draft created · 3 reviews     │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+### Updated file structure
+
+```
+12-job-search-assistant/
+├── README.md
+│
+├── web/
+│   ├── main.py                   ← FastAPI app, route definitions
+│   ├── routes/
+│   │   ├── opportunities.py      ← opportunity CRUD + transitions
+│   │   ├── reviews.py            ← HITL review queue
+│   │   ├── agent.py              ← run trigger + SSE streaming
+│   │   ├── drafts.py             ← draft approval + revision
+│   │   └── profile.py            ← candidate profile CRUD
+│   ├── templates/
+│   │   ├── base.html             ← layout, nav, CSS variables
+│   │   ├── dashboard.html        ← kanban pipeline view
+│   │   ├── reviews.html          ← review queue
+│   │   ├── opportunity.html      ← detail page (tabbed)
+│   │   ├── digest.html           ← agent run + SSE terminal
+│   │   └── profile.html          ← candidate profile editor
+│   └── static/
+│       ├── style.css             ← ~200 lines, no framework
+│       └── htmx.min.js           ← HTMX (single file, no build)
+│
+├── orchestrator.py
+├── state_machine.py
+├── candidate_profile.py
+│
+├── agents/
+│   ├── scout.py
+│   ├── researcher.py
+│   ├── strategist.py
+│   ├── writer.py
+│   └── coach.py
+│
+├── memory/
+│   ├── db.py
+│   ├── schema.sql
+│   └── rag.py
+│
+├── tools/
+│   ├── definitions.py
+│   ├── job_boards.py
+│   ├── web_research.py
+│   ├── email.py
+│   ├── calendar.py
+│   └── dispatch.py
+│
+├── hitl/
+│   └── gates.py                  ← now async (saves to DB, no input())
+│
+├── run.sh                        ← start web server + cron setup
+└── data/
+    ├── candidate.yaml
+    ├── linkedin_connections.csv  ← gitignored
+    ├── examples/                 ← writing samples for RAG
+    └── job_search.db             ← gitignored
+```
+
+---
+
+### Real-time agent streaming (SSE)
+
+When the human clicks "Run now" on the digest page, or when the cron job fires, the agent runs in a background thread and streams its output to the browser via Server-Sent Events.
+
+```python
+# web/routes/agent.py
+
+import asyncio
+from fastapi import APIRouter
+from fastapi.responses import StreamingResponse
+from orchestrator import run_with_stream_callback
+
+router = APIRouter()
+
+@router.get("/api/run/stream")
+async def stream_agent_run():
+    queue = asyncio.Queue()
+
+    async def generate():
+        # Run orchestrator in thread, forward output to SSE
+        async for line in run_with_stream_callback(queue):
+            yield f"data: {line}\n\n"
+        yield "data: [DONE]\n\n"
+
+    return StreamingResponse(generate(), media_type="text/event-stream")
+```
+
+```html
+<!-- digest.html — HTMX SSE extension -->
+<div hx-ext="sse" sse-connect="/api/run/stream" sse-swap="message"
+     id="agent-output" class="terminal">
+</div>
+```
+
+No WebSocket complexity. No JS framework. The terminal panel updates line by line as the agent runs.
+
+---
+
+### Authentication
+
+Single-user personal tool — simple API key auth is enough. No OAuth, no sessions.
+
+```python
+# web/main.py
+from fastapi import Security, HTTPException
+from fastapi.security import APIKeyHeader
+
+API_KEY_HEADER = APIKeyHeader(name="X-API-Key")
+
+async def require_api_key(api_key: str = Security(API_KEY_HEADER)):
+    if api_key != os.environ["APP_API_KEY"]:
+        raise HTTPException(status_code=403)
+```
+
+The frontend stores the key in `localStorage` and sends it with every HTMX request via a meta tag + HTMX config.
+
+---
+
+### Deployment
+
+Local: `uvicorn web.main:app --reload`
+
+Production (single command on Fly.io or Railway):
+```bash
+fly launch          # detects FastAPI, creates Dockerfile
+fly deploy          # builds + deploys
+fly secrets set ANTHROPIC_API_KEY=... APP_API_KEY=...
+```
+
+The SQLite database and ChromaDB are mounted as persistent volumes. The cron job runs as a separate Fly.io machine that wakes up, runs the orchestrator, and sleeps.
+
+---
+
+### Updated implementation plan
+
+#### Phase 1 — Agent core (unchanged)
+- [ ] `memory/schema.sql` + `memory/db.py`
+- [ ] `state_machine.py`
+- [ ] `candidate_profile.py`
+- [ ] `tools/definitions.py` + `tools/dispatch.py`
+
+#### Phase 2 — Scout + Researcher
+- [ ] `tools/job_boards.py`
+- [ ] `tools/web_research.py`
+- [ ] `agents/scout.py` + `agents/researcher.py`
+- [ ] `memory/rag.py`
+
+#### Phase 3 — Strategist + Writer
+- [ ] `agents/strategist.py`
+- [ ] `tools/email.py` (Gmail API)
+- [ ] `agents/writer.py`
+- [ ] `hitl/gates.py` — async version (writes to DB, no `input()`)
+
+#### Phase 4 — Coach + Orchestrator
+- [ ] `agents/coach.py`
+- [ ] `tools/calendar.py`
+- [ ] `orchestrator.py` with `run_with_stream_callback()`
+
+#### Phase 5 — Web application
+- [ ] `web/main.py` — FastAPI app + auth
+- [ ] `web/routes/` — all 5 route files
+- [ ] `web/templates/` — all 5 pages + base layout
+- [ ] `web/static/style.css` + `htmx.min.js`
+- [ ] SSE streaming for agent run page
+- [ ] `run.sh` — `uvicorn` + cron setup
+
+#### Phase 6 — Deployment + MCP
+- [ ] `Dockerfile`
+- [ ] Fly.io / Railway config
+- [ ] Persistent volume for SQLite + ChromaDB
+- [ ] MCP server exposing pipeline to Claude Code
+
+---
+
 ## Key design decisions
 
 **Quality over quantity** — the Scout is capped at 15 active opportunities. The agent won't chase volume. If the pipeline is full, new discoveries wait.
