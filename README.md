@@ -1,6 +1,6 @@
 # AI Agent Fundamentals
 
-> 11 hands-on projects to understand how AI agents actually work — from a single tool call to a custom MCP server running inside Claude Code.
+> 13 hands-on projects to understand how AI agents actually work — from a single tool call to full production systems with web frontends, real-time streaming, and autonomous incident response.
 
 Each project teaches **one concept**, has **diagrams**, and is **runnable in under an hour**.
 
@@ -12,7 +12,7 @@ Most tutorials show you *that* agents work. These projects show you *how* and *w
 
 By the end, you will understand every moving part inside tools like LangChain, CrewAI, AutoGPT, or any production AI agent — because you will have built them yourself.
 
-Projects 01–05 cover the foundations. Projects 06–11 cover production patterns and together provide full coverage of all 5 domains of the **Anthropic Certified Architect (CCA-F)** exam.
+Projects 01–05 cover the foundations. Projects 06–11 cover production patterns and together provide full coverage of all 5 domains of the **Anthropic Certified Architect (CCA-F)** exam. Projects 12–13 are full-stack capstone applications.
 
 ---
 
@@ -77,6 +77,13 @@ flowchart LR
 | 09 | [config-drift-detector](./09-config-drift-detector/) | Scheduled / Event-Driven | Unattended agent that compares desired vs. live infrastructure state and files a drift report |
 | 10 | [feature-flag-manager](./10-feature-flag-manager/) | State Machine Agents | Agent that enforces valid feature flag lifecycle transitions at the tool level |
 | 11 | [mcp-server](./11-mcp-server/) | MCP + Claude Code | Custom MCP server that exposes git tools to Claude Code and Claude Desktop |
+
+### Capstone Applications
+
+| # | Project | Concept | What you build |
+|---|---|---|---|
+| 12 | [job-search-assistant](./12-job-search-assistant/) | Full-stack agent system | Multi-agent job search strategist with pipeline management, HITL gates, and web dashboard |
+| 13 | [sre-devops-agent](./13-sre-devops-agent/) | Autonomous SRE | Event-driven incident response agent that triages, diagnoses, auto-remediates, and learns |
 
 ---
 
