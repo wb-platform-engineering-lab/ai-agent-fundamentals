@@ -1,0 +1,994 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Agent Engineering — Core Concepts</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --text:        #1a1a1a;
+      --muted:       #555;
+      --border:      #e0e0e0;
+      --accent:      #2563eb;
+      --accent-bg:   #eff6ff;
+      --warn-bg:     #fffbeb;
+      --warn-border: #f59e0b;
+      --code-bg:     #f4f4f5;
+      --green-bg:    #f0fdf4;
+      --green-border:#16a34a;
+      --sidebar-w:   260px;
+      --max-content: 820px;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      color: var(--text);
+      line-height: 1.7;
+      background: #fff;
+      display: flex;
+    }
+
+    /* ── Sidebar ─────────────────────────────────────── */
+    #sidebar {
+      position: fixed;
+      top: 0; left: 0;
+      width: var(--sidebar-w);
+      height: 100vh;
+      overflow-y: auto;
+      padding: 2rem 1.25rem;
+      border-right: 1px solid var(--border);
+      background: #fafafa;
+      font-size: 0.875rem;
+    }
+
+    #sidebar .site-title {
+      font-weight: 700;
+      font-size: 0.95rem;
+      color: var(--text);
+      text-decoration: none;
+      display: block;
+      margin-bottom: 2rem;
+      line-height: 1.3;
+    }
+
+    #sidebar nav ul { list-style: none; }
+    #sidebar nav li { margin-bottom: 0.2rem; }
+    #sidebar nav a {
+      color: var(--muted);
+      text-decoration: none;
+      display: block;
+      padding: 0.25rem 0.5rem;
+      border-radius: 4px;
+      transition: background 0.15s, color 0.15s;
+    }
+    #sidebar nav a:hover { background: var(--border); color: var(--text); }
+    #sidebar nav a.active { color: var(--accent); font-weight: 600; background: var(--accent-bg); }
+
+    #sidebar .section-label {
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #999;
+      margin: 1.5rem 0 0.5rem 0.5rem;
+    }
+
+    /* ── Main content ────────────────────────────────── */
+    main {
+      margin-left: var(--sidebar-w);
+      padding: 3rem 2rem 6rem;
+      max-width: calc(var(--sidebar-w) + var(--max-content) + 4rem);
+      width: 100%;
+    }
+
+    .content { max-width: var(--max-content); }
+
+    /* ── Typography ──────────────────────────────────── */
+    h1 { font-size: 2rem; font-weight: 800; line-height: 1.2; margin-bottom: 0.75rem; }
+    h2 { font-size: 1.35rem; font-weight: 700; margin: 3rem 0 1rem; padding-bottom: 0.4rem; border-bottom: 1px solid var(--border); }
+    h3 { font-size: 1.05rem; font-weight: 700; margin: 2rem 0 0.75rem; }
+    h4 { font-size: 0.95rem; font-weight: 700; margin: 1.5rem 0 0.5rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; font-size: 0.75rem; }
+    p  { margin-bottom: 1rem; color: var(--text); }
+    strong { font-weight: 700; }
+    em { font-style: italic; }
+
+    ul, ol { margin: 0.75rem 0 1rem 1.5rem; }
+    li { margin-bottom: 0.35rem; }
+
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    hr { border: none; border-top: 1px solid var(--border); margin: 2.5rem 0; }
+
+    /* ── Subtitle / lead ─────────────────────────────── */
+    .lead {
+      font-size: 1.1rem;
+      color: var(--muted);
+      margin-bottom: 0.5rem;
+      margin-top: 0.25rem;
+    }
+
+    .tag {
+      display: inline-block;
+      font-size: 0.72rem;
+      font-weight: 600;
+      background: var(--accent-bg);
+      color: var(--accent);
+      padding: 0.2rem 0.6rem;
+      border-radius: 99px;
+      margin-right: 0.4rem;
+      margin-bottom: 1.5rem;
+    }
+
+    /* ── Code ────────────────────────────────────────── */
+    code {
+      font-family: "JetBrains Mono", "Fira Code", "Cascadia Code", monospace;
+      font-size: 0.85em;
+      background: var(--code-bg);
+      padding: 0.15em 0.4em;
+      border-radius: 4px;
+    }
+
+    pre {
+      background: #18181b;
+      color: #e4e4e7;
+      padding: 1.25rem 1.5rem;
+      border-radius: 8px;
+      overflow-x: auto;
+      margin: 1.25rem 0;
+      font-size: 0.85rem;
+      line-height: 1.6;
+    }
+
+    pre code {
+      background: none;
+      padding: 0;
+      color: inherit;
+      font-size: inherit;
+    }
+
+    .token-key    { color: #93c5fd; }
+    .token-string { color: #86efac; }
+    .token-value  { color: #fca5a5; }
+    .token-comment{ color: #6b7280; font-style: italic; }
+    .token-kw     { color: #c4b5fd; }
+    .token-fn     { color: #fde68a; }
+
+    /* ── Tables ──────────────────────────────────────── */
+    table { width: 100%; border-collapse: collapse; margin: 1.25rem 0; font-size: 0.9rem; }
+    thead th { background: #f4f4f5; font-weight: 700; text-align: left; padding: 0.6rem 0.9rem; border-bottom: 2px solid var(--border); }
+    tbody td { padding: 0.55rem 0.9rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+    tbody tr:last-child td { border-bottom: none; }
+    tbody tr:hover { background: #fafafa; }
+
+    /* ── Callouts ────────────────────────────────────── */
+    .callout {
+      padding: 1rem 1.25rem;
+      border-radius: 6px;
+      border-left: 4px solid;
+      margin: 1.5rem 0;
+      font-size: 0.925rem;
+    }
+    .callout.info  { background: var(--accent-bg); border-color: var(--accent); }
+    .callout.warn  { background: var(--warn-bg);   border-color: var(--warn-border); }
+    .callout.green { background: var(--green-bg);  border-color: var(--green-border); }
+    .callout strong { display: block; margin-bottom: 0.3rem; }
+
+    /* ── Diagram box ─────────────────────────────────── */
+    .diagram {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: #fafafa;
+      padding: 1.5rem;
+      margin: 1.5rem 0;
+      font-family: "JetBrains Mono", monospace;
+      font-size: 0.82rem;
+      line-height: 1.8;
+      overflow-x: auto;
+      white-space: pre;
+      color: #333;
+    }
+
+    /* ── Sequence steps ──────────────────────────────── */
+    .steps { counter-reset: step; margin: 1.25rem 0; }
+    .step  { display: flex; gap: 1rem; margin-bottom: 1.25rem; }
+    .step-num {
+      flex-shrink: 0;
+      width: 28px; height: 28px;
+      background: var(--accent);
+      color: #fff;
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.8rem; font-weight: 700;
+      margin-top: 0.1rem;
+    }
+    .step-body p:last-child { margin-bottom: 0; }
+
+    /* ── Comparison cards ────────────────────────────── */
+    .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; margin: 1.25rem 0; }
+    .card { border: 1px solid var(--border); border-radius: 8px; padding: 1.1rem 1.25rem; }
+    .card h4 { margin: 0 0 0.5rem; color: var(--accent); font-size: 0.85rem; text-transform: none; letter-spacing: 0; }
+    .card p, .card li { font-size: 0.875rem; margin-bottom: 0.25rem; }
+
+    /* ── Progress bar ─────────────────────────────────── */
+    #progress-bar {
+      position: fixed;
+      top: 0; left: 0;
+      height: 3px;
+      background: var(--accent);
+      width: 0%;
+      z-index: 100;
+      transition: width 0.1s;
+    }
+
+    /* ── Responsive ───────────────────────────────────── */
+    @media (max-width: 768px) {
+      #sidebar { display: none; }
+      main { margin-left: 0; padding: 2rem 1rem 4rem; }
+    }
+  </style>
+</head>
+<body>
+
+<div id="progress-bar"></div>
+
+<!-- Sidebar -->
+<aside id="sidebar">
+  <a class="site-title" href="#">AI Agent<br>Engineering</a>
+
+  <span class="section-label">On this page</span>
+  <nav>
+    <ul>
+      <li><a href="#overview">Overview</a></li>
+      <li><a href="#problem">The Problem</a></li>
+      <li><a href="#what-is">What is an AI Agent?</a></li>
+      <li><a href="#tool-use">Tool Use</a></li>
+      <li><a href="#agent-loop">The Agent Loop</a></li>
+      <li><a href="#memory">Memory</a></li>
+      <li><a href="#patterns">Core Patterns</a></li>
+      <li><a href="#multi-agent">Multi-Agent Systems</a></li>
+      <li><a href="#hitl">Human-in-the-Loop</a></li>
+      <li><a href="#structured-output">Structured Output</a></li>
+      <li><a href="#state-machine">State Machine Agents</a></li>
+      <li><a href="#mcp">MCP</a></li>
+      <li><a href="#monitoring">Monitoring</a></li>
+      <li><a href="#frameworks">Frameworks</a></li>
+      <li><a href="#use-cases">Use Cases</a></li>
+    </ul>
+  </nav>
+</aside>
+
+<!-- Main -->
+<main>
+<div class="content">
+
+  <!-- Header -->
+  <p class="lead">Core Concepts</p>
+  <h1>AI Agent Engineering</h1>
+  <p class="lead">How to design, build, and operate AI systems that reason, act, and learn — not just respond.</p>
+  <div>
+    <span class="tag">LLM</span>
+    <span class="tag">Tool Use</span>
+    <span class="tag">Multi-Agent</span>
+    <span class="tag">Production</span>
+  </div>
+
+  <hr>
+
+  <!-- Overview -->
+  <h2 id="overview">Overview</h2>
+  <p>
+    An AI agent is a system in which a large language model (LLM) drives a loop: it reasons about a goal, decides which action to take, executes that action via a tool, observes the result, and repeats — until the task is complete or it decides to stop.
+  </p>
+  <p>
+    This is fundamentally different from a standard LLM call, where you send a prompt and receive a single response. Agents are <strong>iterative, stateful, and action-capable</strong>. They can read files, call APIs, run commands, query databases, and make decisions based on intermediate results.
+  </p>
+
+  <div class="callout info">
+    <strong>Key insight</strong>
+    A regular LLM call is input → output. An agent is input → reasoning → action → observation → reasoning → action → ... → output. The loop is what makes it an agent.
+  </div>
+
+  <hr>
+
+  <!-- The Problem -->
+  <h2 id="problem">The Problem: LLMs Alone Are Not Enough</h2>
+  <p>
+    Consider a software team that wants to automate code review. A naive approach: send the diff to an LLM and ask for a review. This works for simple cases, but breaks down immediately in production:
+  </p>
+  <ul>
+    <li>The diff references a function defined in another file — the LLM hasn't seen it</li>
+    <li>The team's coding standards are in an internal wiki — the LLM doesn't know them</li>
+    <li>The review should check for security patterns from last quarter's incident — not in training data</li>
+    <li>The comment should be posted to GitHub — the LLM can't do that</li>
+    <li>If one check fails, the LLM should try a different approach — it can't retry</li>
+  </ul>
+  <p>
+    An LLM without agency is a <strong>stateless oracle</strong>. It can reason but cannot act. It can answer but cannot adapt. AI agent engineering is the discipline of giving LLMs the tools, memory, and structure they need to be genuinely useful in production.
+  </p>
+
+  <hr>
+
+  <!-- What is an AI Agent -->
+  <h2 id="what-is">What is an AI Agent?</h2>
+  <p>Three components are required:</p>
+
+  <div class="cards">
+    <div class="card">
+      <h4>🧠 LLM (the brain)</h4>
+      <p>Reasons about the task, decides which tool to call, interprets results, and produces the final answer.</p>
+    </div>
+    <div class="card">
+      <h4>🔧 Tools (the hands)</h4>
+      <p>Python functions the LLM can request to call. Each tool has a name, description, and input schema.</p>
+    </div>
+    <div class="card">
+      <h4>💾 Memory (the context)</h4>
+      <p>What the agent knows: in-context history, retrieved documents, persisted state from prior sessions.</p>
+    </div>
+  </div>
+
+  <div class="diagram">User message + tool definitions
+        │
+        ▼
+   ┌─────────────┐
+   │    Claude   │  ◄── system prompt + message history
+   └──────┬──────┘
+          │
+    stop_reason?
+          │
+    ┌─────┴──────┐
+    │            │
+  end_turn    tool_use
+    │            │
+    ▼            ▼
+ Final       Dispatch
+ answer       tool
+              │
+              ▼
+         Tool result
+              │
+              ▼
+       Add to messages
+              │
+              └──────► back to Claude</div>
+
+  <p>
+    The loop runs until <code>stop_reason == "end_turn"</code> — meaning the LLM has all the information it needs and produces a final answer — or until a maximum step limit is reached.
+  </p>
+
+  <hr>
+
+  <!-- Tool Use -->
+  <h2 id="tool-use">Tool Use</h2>
+  <p>
+    Tool use is the foundational capability of all agents. Instead of returning text, Claude can return a structured <strong>tool call</strong> — a request to execute a specific function with specific arguments.
+  </p>
+
+  <h3>Anatomy of a tool definition</h3>
+  <p>Every tool has two parts: a <strong>definition</strong> (what Claude sees) and an <strong>implementation</strong> (what your code runs).</p>
+
+<pre><code><span class="token-comment"># Definition — passed to the API</span>
+{
+    <span class="token-key">"name"</span>: <span class="token-string">"run_git_diff"</span>,
+    <span class="token-key">"description"</span>: <span class="token-string">"Returns the currently staged git diff.
+                   Use this to see which lines are about to be committed."</span>,
+    <span class="token-key">"input_schema"</span>: {
+        <span class="token-key">"type"</span>: <span class="token-string">"object"</span>,
+        <span class="token-key">"properties"</span>: {
+            <span class="token-key">"file_path"</span>: {
+                <span class="token-key">"type"</span>: <span class="token-string">"string"</span>,
+                <span class="token-key">"description"</span>: <span class="token-string">"Specific file to diff (optional)"</span>
+            }
+        }
+    }
+}
+
+<span class="token-comment"># Implementation — your Python function</span>
+<span class="token-kw">def</span> <span class="token-fn">run_git_diff</span>(file_path: str = <span class="token-string">""</span>) -> str:
+    result = subprocess.run(
+        [<span class="token-string">"git"</span>, <span class="token-string">"diff"</span>, <span class="token-string">"--staged"</span>] + ([file_path] <span class="token-kw">if</span> file_path <span class="token-kw">else</span> []),
+        capture_output=<span class="token-value">True</span>, text=<span class="token-value">True</span>
+    )
+    <span class="token-kw">return</span> result.stdout <span class="token-kw">or</span> <span class="token-string">"No staged changes found."</span></code></pre>
+
+  <div class="callout warn">
+    <strong>The description is the interface.</strong>
+    Claude decides when and how to call a tool based purely on its description. A vague description like <em>"this tool does stuff"</em> means Claude won't know when to use it. A precise description means Claude uses it at exactly the right moment.
+  </div>
+
+  <h3>What the API response looks like when Claude calls a tool</h3>
+<pre><code>{
+  <span class="token-key">"stop_reason"</span>: <span class="token-string">"tool_use"</span>,
+  <span class="token-key">"content"</span>: [
+    {
+      <span class="token-key">"type"</span>: <span class="token-string">"tool_use"</span>,
+      <span class="token-key">"id"</span>: <span class="token-string">"toolu_01abc123"</span>,
+      <span class="token-key">"name"</span>: <span class="token-string">"run_git_diff"</span>,
+      <span class="token-key">"input"</span>: { <span class="token-key">"file_path"</span>: <span class="token-string">"auth.py"</span> }
+    }
+  ]
+}</code></pre>
+
+  <p>
+    Your code reads <code>stop_reason</code>, dispatches to the correct function, and sends the result back as a <code>tool_result</code> message. Claude never calls your functions directly — it returns a structured request, you execute it, you send back the result.
+  </p>
+
+  <hr>
+
+  <!-- The Agent Loop -->
+  <h2 id="agent-loop">The Agent Loop</h2>
+  <p>
+    The agent loop is the core pattern used by every agent in this series. It is a <code>while True</code> loop that terminates when Claude returns <code>stop_reason == "end_turn"</code>.
+  </p>
+
+<pre><code><span class="token-kw">def</span> <span class="token-fn">run_agent</span>(user_message: str) -> str:
+    messages = [{<span class="token-key">"role"</span>: <span class="token-string">"user"</span>, <span class="token-key">"content"</span>: user_message}]
+
+    <span class="token-kw">while True</span>:
+        <span class="token-comment"># 1. Call Claude</span>
+        response = client.messages.create(
+            model=<span class="token-string">"claude-sonnet-4-6"</span>,
+            tools=TOOL_DEFINITIONS,
+            messages=messages,
+        )
+
+        <span class="token-comment"># 2. Done?</span>
+        <span class="token-kw">if</span> response.stop_reason == <span class="token-string">"end_turn"</span>:
+            <span class="token-kw">return</span> next(b.text <span class="token-kw">for</span> b <span class="token-kw">in</span> response.content <span class="token-kw">if</span> b.type == <span class="token-string">"text"</span>)
+
+        <span class="token-comment"># 3. Tool call — execute and send result back</span>
+        messages.append({<span class="token-key">"role"</span>: <span class="token-string">"assistant"</span>, <span class="token-key">"content"</span>: response.content})
+        tool_results = []
+        <span class="token-kw">for</span> block <span class="token-kw">in</span> response.content:
+            <span class="token-kw">if</span> block.type == <span class="token-string">"tool_use"</span>:
+                result = dispatch(block.name, block.input)
+                tool_results.append({
+                    <span class="token-key">"type"</span>: <span class="token-string">"tool_result"</span>,
+                    <span class="token-key">"tool_use_id"</span>: block.id,
+                    <span class="token-key">"content"</span>: result,
+                })
+        messages.append({<span class="token-key">"role"</span>: <span class="token-string">"user"</span>, <span class="token-key">"content"</span>: tool_results})
+        <span class="token-comment"># 4. Loop — Claude reasons with the tool result</span></code></pre>
+
+  <div class="callout green">
+    <strong>Always add a MAX_STEPS guard.</strong>
+    An agent without a step limit can loop indefinitely if the task is impossible or the tools keep failing. Set <code>MAX_STEPS = 15</code> and return a graceful error if reached.
+  </div>
+
+  <hr>
+
+  <!-- Memory -->
+  <h2 id="memory">Memory</h2>
+  <p>Agents have access to four types of memory, each with different scope and persistence:</p>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Where it lives</th>
+        <th>Scope</th>
+        <th>Example</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>In-context</strong></td>
+        <td>Message history array</td>
+        <td>Current session only</td>
+        <td>Previous tool calls in this run</td>
+      </tr>
+      <tr>
+        <td><strong>External (episodic)</strong></td>
+        <td>SQLite / database</td>
+        <td>Persists across sessions</td>
+        <td>Past standup notes, incident history</td>
+      </tr>
+      <tr>
+        <td><strong>Semantic (RAG)</strong></td>
+        <td>Vector database (ChromaDB)</td>
+        <td>Persists, retrieved by similarity</td>
+        <td>Internal docs, past reports, code summaries</td>
+      </tr>
+      <tr>
+        <td><strong>Parametric</strong></td>
+        <td>Model weights</td>
+        <td>Fixed at training time</td>
+        <td>General world knowledge</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>RAG — Retrieval-Augmented Generation</h3>
+  <p>
+    RAG solves the problem of domain-specific knowledge: instead of fine-tuning a model on your documents, you embed them into a vector database and retrieve the most relevant chunks at query time.
+  </p>
+
+  <div class="diagram">Query: "What's our password policy?"
+      │
+      ▼
+  Embed query ──► vector [0.23, -0.11, 0.87, ...]
+      │
+      ▼
+  ChromaDB similarity search
+      │
+      ▼
+  Top 3 matching chunks from your docs
+      │
+      ▼
+  Inject into Claude's prompt as context
+      │
+      ▼
+  Claude answers with citation: "According to security-policy.pdf..."</div>
+
+  <p>
+    The key principle: <strong>retrieval quality determines answer quality</strong>. The LLM can only answer as well as the chunks it receives. Chunk size, overlap, and embedding model choice all matter more than prompt engineering.
+  </p>
+
+  <hr>
+
+  <!-- Core Patterns -->
+  <h2 id="patterns">Core Patterns</h2>
+
+  <h3>ReAct — Reason + Act</h3>
+  <p>
+    The ReAct pattern makes the agent's reasoning visible before each action. Claude emits a text block (its thought) followed by a tool_use block (its action). This produces interpretable, debuggable agents.
+  </p>
+
+  <div class="diagram">User: "How many Python files are in this project?"
+
+Step 1  🧠 I need to count Python files. I'll use run_command.
+        ⚡ run_command("find . -name '*.py' | wc -l")
+        👁 42
+
+Step 2  🧠 I have the answer.
+        ✓ "There are 42 Python files in this project."</div>
+
+  <h3>Map-Reduce for Large Contexts</h3>
+  <p>
+    When a task involves more content than fits in one context window, split it into chunks (map), process each independently, then synthesize the results (reduce).
+  </p>
+
+  <div class="diagram">50 Python files (too large for one call)
+        │
+        ▼ MAP (parallel Claude calls)
+  file_1 → summary_1
+  file_2 → summary_2       Each summary: 3 bullets, ~100 tokens
+  ...
+  file_50 → summary_50
+        │
+        ▼ REDUCE (one final Claude call)
+  all 50 summaries → answer to "where is the auth logic?"</div>
+
+  <div class="callout info">
+    <strong>Why this works:</strong> Summaries compress information — 500 lines of code becomes 3 bullets, losing noise but keeping semantics. The reduce step works because summaries preserve the meaning needed to answer most questions.
+  </div>
+
+  <hr>
+
+  <!-- Multi-Agent -->
+  <h2 id="multi-agent">Multi-Agent Systems</h2>
+  <p>
+    A single agent handles one task at a time with one perspective. Multi-agent systems add <strong>specialization</strong> and <strong>parallelism</strong>: an orchestrator breaks a task into sub-tasks, delegates to specialist agents, and synthesizes their outputs.
+  </p>
+
+  <div class="diagram">                  ┌─────────────┐
+                  │ Orchestrator│
+                  └──────┬──────┘
+          ┌───────────────┼───────────────┐
+          ▼               ▼               ▼
+  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐
+  │  Security    │ │ Performance  │ │    Style     │
+  │  Reviewer    │ │  Reviewer    │ │  Reviewer    │
+  └──────┬───────┘ └──────┬───────┘ └──────┬───────┘
+         │                │                │
+         └────────────────┴────────────────┘
+                          │
+                    ┌─────▼──────┐
+                    │ Synthesizer│
+                    └────────────┘</div>
+
+  <p>
+    Specialization is a <strong>system prompt choice</strong> — the same underlying model becomes a security expert or a style reviewer depending on the instructions it receives. No fine-tuning required.
+  </p>
+
+  <table>
+    <thead>
+      <tr><th>Pattern</th><th>When to use</th><th>Trade-off</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Single agent</strong></td>
+        <td>Task fits in one context, linear workflow</td>
+        <td>Simple, lower latency, lower cost</td>
+      </tr>
+      <tr>
+        <td><strong>Parallel specialists</strong></td>
+        <td>Multiple independent perspectives needed</td>
+        <td>Higher quality, higher cost, parallel latency</td>
+      </tr>
+      <tr>
+        <td><strong>Sequential pipeline</strong></td>
+        <td>Each step depends on the previous output</td>
+        <td>Modular, testable, additive latency</td>
+      </tr>
+      <tr>
+        <td><strong>Hierarchical orchestration</strong></td>
+        <td>Complex tasks with many sub-tasks</td>
+        <td>Flexible, harder to debug, highest cost</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <hr>
+
+  <!-- Human-in-the-Loop -->
+  <h2 id="hitl">Human-in-the-Loop (HITL)</h2>
+  <p>
+    Production agents must know when to act autonomously and when to wait for human approval. The key principle: <strong>HITL gates belong in tool implementations, not in system prompts</strong>.
+  </p>
+
+  <div class="callout warn">
+    <strong>Prompt constraints can be bypassed.</strong>
+    A system prompt that says "always ask before deploying" can be overridden by a cleverly phrased user message or an edge case the prompt didn't anticipate. A gate inside <code>trigger_deployment()</code> cannot be bypassed — it's code, not text.
+  </div>
+
+<pre><code><span class="token-comment"># ✗ Fragile — lives in the prompt, can be bypassed</span>
+SYSTEM_PROMPT = <span class="token-string">"Always ask for approval before deploying."</span>
+
+<span class="token-comment"># ✓ Robust — lives in the tool, always enforced</span>
+<span class="token-kw">def</span> <span class="token-fn">trigger_deployment</span>(service: str, version: str) -> str:
+    print(<span class="token-string">f"⚠️  Deploy {version} to {service}?"</span>)
+    answer = input(<span class="token-string">"Approve? [y/N]: "</span>).strip().lower()
+    <span class="token-kw">if</span> answer != <span class="token-string">"y"</span>:
+        <span class="token-kw">return</span> <span class="token-string">"Deployment cancelled."</span>
+    <span class="token-kw">return</span> _deploy(service, version)</code></pre>
+
+  <table>
+    <thead>
+      <tr><th>Action type</th><th>Examples</th><th>Approach</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Safe</strong></td>
+        <td>Read file, search docs, query metrics</td>
+        <td>Fully autonomous — no approval needed</td>
+      </tr>
+      <tr>
+        <td><strong>Reversible</strong></td>
+        <td>Create draft, toggle feature flag, restart pod</td>
+        <td>Autonomous, but log every action</td>
+      </tr>
+      <tr>
+        <td><strong>Risky</strong></td>
+        <td>Send email, deploy to production, delete records</td>
+        <td>Always require explicit human approval</td>
+      </tr>
+      <tr>
+        <td><strong>Irreversible</strong></td>
+        <td>Database migration, billing charge, public post</td>
+        <td>Require approval + confirmation + audit trail</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <hr>
+
+  <!-- Structured Output -->
+  <h2 id="structured-output">Structured Output via Tool Schema</h2>
+  <p>
+    Asking Claude to "return JSON" is fragile — the response might include markdown fences, explanatory text, or slightly wrong field names. A more reliable approach: define a tool whose <code>input_schema</code> is the exact JSON shape you want, then force Claude to call it.
+  </p>
+
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-body">
+        <p><strong>Define the output schema as a tool</strong></p>
+        <p>The tool's <code>input_schema</code> is your contract. Required fields, enum values, nested objects — all enforced at the API level before your code runs.</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-body">
+        <p><strong>Force the call via system prompt</strong></p>
+        <p><em>"Analyze the incident log and call <code>save_incident_report</code> with your findings. You MUST call this tool — do not write the report as text."</em></p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-body">
+        <p><strong>Read <code>block.input</code>, not <code>block.text</code></strong></p>
+        <p>The structured data is in the tool call's input dict — already parsed, already validated. No JSON parsing, no regex, no error handling for malformed output.</p>
+      </div>
+    </div>
+  </div>
+
+  <table>
+    <thead>
+      <tr><th>Approach</th><th>Reliability</th><th>Schema enforcement</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>"Return JSON" in prompt</td><td>Fragile</td><td>None</td></tr>
+      <tr><td><code>response_format</code> (OpenAI)</td><td>Medium</td><td>Partial</td></tr>
+      <tr><td><strong>Tool schema (this approach)</strong></td><td><strong>High</strong></td><td><strong>Full JSON Schema</strong></td></tr>
+    </tbody>
+  </table>
+
+  <hr>
+
+  <!-- State Machine -->
+  <h2 id="state-machine">State Machine Agents</h2>
+  <p>
+    Some workflows have enforced sequences. You can't promote a feature flag from <code>draft</code> directly to <code>ga</code> — that would bypass canary and rollout testing stages. When the agent's valid actions depend on current state, encode that as a state machine <strong>in your tool implementation</strong>.
+  </p>
+
+  <div class="diagram">draft ──► canary ──► rollout ──► ga ──► deprecated
+              │            │
+              ▼            ▼
+            draft        canary    (rollback paths)</div>
+
+<pre><code>VALID_TRANSITIONS = {
+    <span class="token-string">"draft"</span>:      [<span class="token-string">"canary"</span>],
+    <span class="token-string">"canary"</span>:     [<span class="token-string">"rollout"</span>, <span class="token-string">"draft"</span>],
+    <span class="token-string">"rollout"</span>:    [<span class="token-string">"ga"</span>, <span class="token-string">"canary"</span>],
+    <span class="token-string">"ga"</span>:         [<span class="token-string">"deprecated"</span>],
+    <span class="token-string">"deprecated"</span>: [],  <span class="token-comment"># terminal</span>
+}
+
+<span class="token-kw">def</span> <span class="token-fn">transition_flag</span>(name: str, to_state: str) -> str:
+    current = get_flag_state(name)
+    allowed = VALID_TRANSITIONS.get(current, [])
+    <span class="token-kw">if</span> to_state <span class="token-kw">not in</span> allowed:
+        <span class="token-kw">return</span> <span class="token-string">f"Error: '{current}' → '{to_state}' invalid. Allowed: {allowed}"</span>
+    <span class="token-comment"># Claude reads this error, understands the constraint, and adapts</span>
+    ...</code></pre>
+
+  <p>
+    The agent doesn't need to know the rules upfront. It discovers them through tool responses — a failed transition returns an error message that tells Claude exactly what is allowed. This is more robust than encoding rules in the system prompt.
+  </p>
+
+  <hr>
+
+  <!-- MCP -->
+  <h2 id="mcp">Model Context Protocol (MCP)</h2>
+  <p>
+    All patterns above use the Anthropic API directly — you write the tool definitions, the dispatch loop, and the agent logic. MCP flips this: you write a <strong>server</strong> that declares its tools, and any MCP-compatible client (Claude Code, Claude Desktop) can connect and use them — without any agent code on your part.
+  </p>
+
+  <table>
+    <thead>
+      <tr><th></th><th>API tool use</th><th>MCP server</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Where tools live</td><td>In your agent code</td><td>In a separate server process</td></tr>
+      <tr><td>Who writes the loop</td><td>You (<code>agent.py</code>)</td><td>The MCP client (Claude Code)</td></tr>
+      <tr><td>Reusability</td><td>One agent only</td><td>Any MCP client</td></tr>
+      <tr><td>Configuration</td><td>In code</td><td><code>claude_desktop_config.json</code></td></tr>
+      <tr><td>Tool definition</td><td>JSON schema dict</td><td><code>@mcp.tool()</code> decorator</td></tr>
+    </tbody>
+  </table>
+
+<pre><code><span class="token-kw">from</span> mcp.server.fastmcp <span class="token-kw">import</span> FastMCP
+
+mcp = FastMCP(<span class="token-string">"git-tools"</span>)
+
+<span class="token-kw">@mcp.tool</span>()
+<span class="token-kw">def</span> <span class="token-fn">get_staged_diff</span>() -> str:
+    <span class="token-string">"""Returns the currently staged git diff.
+    Use this to see which lines are about to be committed."""</span>
+    result = subprocess.run([<span class="token-string">"git"</span>, <span class="token-string">"diff"</span>, <span class="token-string">"--staged"</span>], capture_output=<span class="token-value">True</span>, text=<span class="token-value">True</span>)
+    <span class="token-kw">return</span> result.stdout <span class="token-kw">or</span> <span class="token-string">"No staged changes."</span>
+
+<span class="token-kw">if</span> __name__ == <span class="token-string">"__main__"</span>:
+    mcp.run()</code></pre>
+
+  <p>The <strong>docstring is the tool description</strong> — the same principle as API tool use, different syntax. Write it well.</p>
+
+  <hr>
+
+  <!-- Monitoring -->
+  <h2 id="monitoring">Monitoring & Observability</h2>
+  <p>Agents are harder to debug than regular software because their behavior is emergent. Every production agent needs structured logging of its decisions and actions.</p>
+
+  <table>
+    <thead>
+      <tr><th>Metric</th><th>What to track</th><th>Alert threshold</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Tool call rate</strong></td>
+        <td>Calls per agent run, by tool name</td>
+        <td>Runaway loops: &gt; MAX_STEPS</td>
+      </tr>
+      <tr>
+        <td><strong>Token usage</strong></td>
+        <td>Input + output tokens per run</td>
+        <td>Cost spike: &gt; 2× baseline</td>
+      </tr>
+      <tr>
+        <td><strong>Latency</strong></td>
+        <td>Time per tool call, total run time</td>
+        <td>p95 &gt; SLA threshold</td>
+      </tr>
+      <tr>
+        <td><strong>Tool error rate</strong></td>
+        <td>Tool calls returning error strings</td>
+        <td>&gt; 10% error rate on any tool</td>
+      </tr>
+      <tr>
+        <td><strong>Step count</strong></td>
+        <td>Iterations before end_turn</td>
+        <td>Consistently near MAX_STEPS</td>
+      </tr>
+      <tr>
+        <td><strong>Human override rate</strong></td>
+        <td>% of HITL gates rejected by human</td>
+        <td>&gt; 20% rejection = wrong tool/strategy</td>
+      </tr>
+      <tr>
+        <td><strong>Task completion rate</strong></td>
+        <td>% of runs that produce a valid final answer</td>
+        <td>&lt; 95% success</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>Log every tool call</h3>
+<pre><code>{
+  <span class="token-key">"run_id"</span>:        <span class="token-string">"run_20260526_143201"</span>,
+  <span class="token-key">"agent"</span>:         <span class="token-string">"researcher"</span>,
+  <span class="token-key">"step"</span>:          <span class="token-value">3</span>,
+  <span class="token-key">"tool"</span>:          <span class="token-string">"web_search"</span>,
+  <span class="token-key">"input"</span>:         { <span class="token-key">"query"</span>: <span class="token-string">"Stripe layoffs 2026"</span> },
+  <span class="token-key">"output_chars"</span>:  <span class="token-value">1842</span>,
+  <span class="token-key">"duration_ms"</span>:   <span class="token-value">340</span>,
+  <span class="token-key">"error"</span>:         <span class="token-value">null</span>
+}</code></pre>
+
+  <hr>
+
+  <!-- Frameworks -->
+  <h2 id="frameworks">Frameworks & Platforms</h2>
+
+  <table>
+    <thead>
+      <tr><th>Tool</th><th>Type</th><th>Best for</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Anthropic SDK (raw)</strong></td>
+        <td>API client</td>
+        <td>Full control, production agents, learning the patterns</td>
+      </tr>
+      <tr>
+        <td><strong>LangChain</strong></td>
+        <td>Agent framework</td>
+        <td>Rapid prototyping, many integrations available</td>
+      </tr>
+      <tr>
+        <td><strong>LlamaIndex</strong></td>
+        <td>RAG + agent framework</td>
+        <td>Document-heavy applications, complex retrieval pipelines</td>
+      </tr>
+      <tr>
+        <td><strong>CrewAI</strong></td>
+        <td>Multi-agent framework</td>
+        <td>Role-based agent teams, structured crew workflows</td>
+      </tr>
+      <tr>
+        <td><strong>AutoGen (Microsoft)</strong></td>
+        <td>Conversational multi-agent</td>
+        <td>Agents that converse with each other, code execution</td>
+      </tr>
+      <tr>
+        <td><strong>FastMCP</strong></td>
+        <td>MCP server framework</td>
+        <td>Exposing tools to Claude Code / Claude Desktop</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="callout info">
+    <strong>Recommendation:</strong> Learn with the raw Anthropic SDK first. Frameworks add abstractions that hide the mechanics — tool dispatch, message history management, stop_reason handling. Once you understand what the framework is doing for you, use it. If you don't understand it, you can't debug it.
+  </div>
+
+  <hr>
+
+  <!-- Use Cases -->
+  <h2 id="use-cases">Real-World Use Cases</h2>
+
+  <table>
+    <thead>
+      <tr><th>Domain</th><th>Agent type</th><th>Patterns used</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Software engineering</td>
+        <td>Code review, commit message generation, PR description</td>
+        <td>Tool use, RAG, structured output</td>
+      </tr>
+      <tr>
+        <td>DevOps / SRE</td>
+        <td>Incident triage, drift detection, post-mortem generation</td>
+        <td>ReAct loop, state machine, HITL, scheduled</td>
+      </tr>
+      <tr>
+        <td>Customer support</td>
+        <td>Ticket classification, knowledge base Q&amp;A, escalation</td>
+        <td>RAG, multi-agent, structured output</td>
+      </tr>
+      <tr>
+        <td>Legal / compliance</td>
+        <td>Contract review, policy gap analysis, obligation tracking</td>
+        <td>Map-reduce, structured output, state machine</td>
+      </tr>
+      <tr>
+        <td>Research &amp; analysis</td>
+        <td>Market research, literature review, competitive intelligence</td>
+        <td>ReAct loop, map-reduce, RAG</td>
+      </tr>
+      <tr>
+        <td>Personal productivity</td>
+        <td>Job search, daily standup, email drafting</td>
+        <td>Episodic memory, HITL, multi-agent, scheduled</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <hr>
+
+  <!-- Checklist -->
+  <h2>Production Readiness Checklist</h2>
+
+  <ul>
+    <li><strong>MAX_STEPS guard</strong> — every agent loop has an upper bound</li>
+    <li><strong>Tool error handling</strong> — every tool returns a string error (never raises), so Claude can read and adapt</li>
+    <li><strong>HITL gates in code</strong> — not in prompts, for any action with external side effects</li>
+    <li><strong>Structured logging</strong> — every tool call logged with input, output, duration, error</li>
+    <li><strong>Retry + backoff</strong> — transient API errors handled gracefully</li>
+    <li><strong>Context budget management</strong> — load only the relevant subset of memory per run</li>
+    <li><strong>Idempotent tools</strong> — running the same tool twice should not cause double side effects</li>
+    <li><strong>Timeout on external calls</strong> — every subprocess, HTTP call, and DB query has a timeout</li>
+    <li><strong>Audit trail</strong> — every state transition and human decision persisted to DB</li>
+    <li><strong>Graceful degradation</strong> — agent fails safely when tools are unavailable</li>
+  </ul>
+
+  <hr>
+
+  <p style="color: var(--muted); font-size: 0.85rem; margin-top: 2rem;">
+    Part of the <a href="#">AI Agent Fundamentals</a> series — 13 hands-on projects from tool use to full production systems.
+  </p>
+
+</div>
+</main>
+
+<script>
+  // Progress bar
+  window.addEventListener('scroll', () => {
+    const doc = document.documentElement;
+    const pct = (doc.scrollTop / (doc.scrollHeight - doc.clientHeight)) * 100;
+    document.getElementById('progress-bar').style.width = pct + '%';
+  });
+
+  // Active sidebar link
+  const headings = document.querySelectorAll('h2[id]');
+  const links    = document.querySelectorAll('#sidebar nav a');
+
+  const observer = new IntersectionObserver(entries => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        links.forEach(l => l.classList.remove('active'));
+        const active = document.querySelector(`#sidebar nav a[href="#${entry.target.id}"]`);
+        if (active) active.classList.add('active');
+      }
+    });
+  }, { rootMargin: '-20% 0px -70% 0px' });
+
+  headings.forEach(h => observer.observe(h));
+</script>
+
+</body>
+</html>
