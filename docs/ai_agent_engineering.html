@@ -250,7 +250,12 @@
       <li><a href="#patterns">Core Patterns</a></li>
       <li><a href="#multi-agent">Multi-Agent Systems</a></li>
       <li><a href="#hitl">Human-in-the-Loop</a></li>
+      <li><a href="#prompt-engineering">Prompt Engineering</a></li>
+      <li><a href="#few-shot">Few-Shot Prompting</a></li>
       <li><a href="#structured-output">Structured Output</a></li>
+      <li><a href="#validation-retry">Validation &amp; Retry</a></li>
+      <li><a href="#batch-processing">Batch Processing</a></li>
+      <li><a href="#multi-instance">Multi-Instance Review</a></li>
       <li><a href="#state-machine">State Machine Agents</a></li>
       <li><a href="#mcp">MCP</a></li>
       <li><a href="#monitoring">Monitoring</a></li>
@@ -676,6 +681,144 @@ SYSTEM_PROMPT = <span class="token-string">"Always ask for approval before deplo
 
   <hr>
 
+  <!-- Prompt Engineering -->
+  <h2 id="prompt-engineering">Prompt Engineering</h2>
+  <p>
+    Prompt engineering is the discipline of writing instructions that produce <strong>reliable, precise, and consistent</strong> outputs — not just plausible-sounding ones. For production agents, this means treating prompts as code: versioned, tested, and iterated against real failure cases.
+  </p>
+
+  <div class="callout info">
+    <strong>CCA-F Domain 4 — 20% of the exam.</strong>
+    This domain tests your ability to write prompts with measurable criteria, apply few-shot examples, enforce structured output via tool schemas, implement retry loops, choose between synchronous and batch API patterns, and design multi-instance review architectures.
+  </div>
+
+  <h3>System prompt anatomy</h3>
+  <p>A well-structured system prompt has four distinct layers:</p>
+
+  <div class="diagram">┌───────────────────────────────────────────────────┐
+│  1. ROLE         "You are a senior security reviewer."         │
+│  2. CONTEXT      "You are reviewing Python diffs in a         │
+│                   fintech codebase. All user input is         │
+│                   untrusted."                                  │
+│  3. TASK         "For each diff, identify vulnerabilities      │
+│                   and call save_findings() with your results." │
+│  4. CONSTRAINTS  "Only report issues in the ADDED lines (+).  │
+│                   Do not flag commented-out code."             │
+└───────────────────────────────────────────────────┘</div>
+
+  <h3>4.1 — Explicit criteria for precision</h3>
+  <p>
+    Vague instructions produce inconsistent outputs. The most common failure pattern: using qualitative language (<em>"be conservative"</em>, <em>"flag serious issues"</em>) that Claude must interpret differently each run.
+  </p>
+
+  <div class="cards">
+    <div class="card">
+      <h4>✗ Vague — unreliable</h4>
+      <p>"Flag any security issues you find. Be conservative and only report real problems."</p>
+      <p style="color:#ef4444;font-size:0.85rem;margin-top:0.5rem">Claude interprets "conservative" and "real" differently every run. False positive rate is unpredictable.</p>
+    </div>
+    <div class="card">
+      <h4>✓ Explicit — reliable</h4>
+      <p>"Flag an issue ONLY if it meets one of these criteria:<br>
+      — SQL query concatenated with unsanitized user input<br>
+      — Secret or API key hardcoded as a string literal<br>
+      — User-controlled data passed to <code>eval()</code> or <code>exec()</code><br>
+      Do NOT flag: commented-out code, test files, logging statements."</p>
+    </div>
+  </div>
+
+  <p>
+    Explicit criteria reduce hallucination by giving Claude a <strong>decision boundary</strong> rather than a judgment call. The model matches against concrete patterns instead of estimating severity.
+  </p>
+
+  <table>
+    <thead>
+      <tr><th>Vague instruction</th><th>Explicit replacement</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>"Be thorough"</td><td>"Check every function in the diff, including helper functions"</td></tr>
+      <tr><td>"Flag serious issues"</td><td>"Flag issues with CVSS score ≥ 7.0 only"</td></tr>
+      <tr><td>"Return a short summary"</td><td>"Return exactly 3 bullet points, each under 15 words"</td></tr>
+      <tr><td>"Be conservative"</td><td>"If uncertain, set confidence: 'low' — do not omit the finding"</td></tr>
+    </tbody>
+  </table>
+
+  <hr>
+
+  <!-- Few-Shot Prompting -->
+  <h2 id="few-shot">Few-Shot Prompting</h2>
+  <p>
+    Few-shot prompting provides 2–4 worked examples alongside the task description. Examples show Claude <em>how to reason</em>, not just what output shape to produce. They are the most effective tool for reducing hallucination in extraction tasks with varied input structures.
+  </p>
+
+  <h3>4.2 — When and why to use few-shot</h3>
+
+  <div class="cards">
+    <div class="card">
+      <h4>Use few-shot when</h4>
+      <ul>
+        <li>Output requires nuanced judgment (not just format)</li>
+        <li>Input structure varies across documents</li>
+        <li>Zero-shot produces inconsistent tone or depth</li>
+        <li>Edge cases need explicit handling</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h4>Skip few-shot when</h4>
+      <ul>
+        <li>Task is unambiguous with explicit criteria</li>
+        <li>Output is purely structural (tool schema handles it)</li>
+        <li>Context window is already large</li>
+        <li>Examples would add confusion, not clarity</li>
+      </ul>
+    </div>
+  </div>
+
+  <h3>Anatomy of a good few-shot example</h3>
+  <p>Each example should show: the input, the reasoning, and the output. The reasoning step is what enables generalization.</p>
+
+<pre><code><span class="token-comment"># System prompt excerpt with 2-shot examples</span>
+
+SYSTEM = <span class="token-string">"""
+Classify each support ticket by urgency: CRITICAL, HIGH, MEDIUM, or LOW.
+
+Examples:
+
+Input: "Our payment processor is returning 500 errors for all checkouts.
+        We've lost $40k in sales in the last 20 minutes."
+Reasoning: Revenue impact is immediate and quantified. Core business
+           function completely broken. No workaround available.
+Output: CRITICAL
+
+Input: "The export to CSV button doesn't work on the reports page.
+        I can still download via the API."
+Reasoning: Feature broken but workaround exists. No revenue impact.
+           Non-blocking for user's workflow.
+Output: LOW
+
+Now classify the following ticket:
+"""</span></code></pre>
+
+  <div class="callout warn">
+    <strong>Example quality matters more than quantity.</strong>
+    Two well-chosen examples that cover the hard judgment cases outperform six examples of obvious cases. Pick examples that represent the decision boundaries, not the easy middle ground.
+  </div>
+
+  <h3>Few-shot for extraction tasks</h3>
+  <p>Extraction from varied document structures (invoices, contracts, incident logs) benefits especially from few-shot because the same field may appear in different positions or formats:</p>
+
+<pre><code><span class="token-comment"># Input 1: structured log</span>
+<span class="token-comment"># "2026-05-19 14:32:01 ERROR auth-service pod/auth-7d9f CrashLoopBackOff"</span>
+<span class="token-comment"># Output: { "service": "auth-service", "type": "CrashLoopBackOff", "time": "14:32:01" }</span>
+
+<span class="token-comment"># Input 2: prose incident report</span>
+<span class="token-comment"># "At around 2pm the authentication pod started restarting repeatedly"</span>
+<span class="token-comment"># Output: { "service": "auth-service", "type": "CrashLoopBackOff", "time": "~14:00" }</span></code></pre>
+
+  <p>Both inputs map to the same schema. Without examples, Claude might return different field names or omit the type entirely for the prose format. The examples teach the invariant mapping.</p>
+
+  <hr>
+
   <!-- Structured Output -->
   <h2 id="structured-output">Structured Output via Tool Schema</h2>
   <p>
@@ -716,6 +859,271 @@ SYSTEM_PROMPT = <span class="token-string">"Always ask for approval before deplo
       <tr><td><strong>Tool schema (this approach)</strong></td><td><strong>High</strong></td><td><strong>Full JSON Schema</strong></td></tr>
     </tbody>
   </table>
+
+  <h3 style="margin-top:1.5rem">tool_choice — controlling which tool is called</h3>
+  <p>By default Claude decides whether to call a tool. You can override this with the <code>tool_choice</code> parameter:</p>
+
+  <table>
+    <thead>
+      <tr><th>Value</th><th>Behaviour</th><th>When to use</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>{"type": "auto"}</code></td><td>Claude decides — may call a tool or reply in text</td><td>General agent loops</td></tr>
+      <tr><td><code>{"type": "any"}</code></td><td>Must call at least one tool; Claude picks which</td><td>Forcing action, not known which</td></tr>
+      <tr><td><code>{"type": "tool", "name": "save_report"}</code></td><td>Must call exactly this tool</td><td>Structured output extraction</td></tr>
+    </tbody>
+  </table>
+
+  <p style="margin-top:1rem">For structured output, <strong>always use <code>tool_choice: tool</code></strong> pointing at your output schema tool. This guarantees <code>stop_reason == "tool_use"</code> and that <code>block.input</code> contains fully validated data.</p>
+
+<pre><code>response = client.messages.create(
+    model=<span class="token-string">"claude-opus-4-6"</span>,
+    max_tokens=<span class="token-value">1024</span>,
+    tools=[{
+        <span class="token-string">"name"</span>: <span class="token-string">"save_incident_report"</span>,
+        <span class="token-string">"description"</span>: <span class="token-string">"Save structured incident report"</span>,
+        <span class="token-string">"input_schema"</span>: {
+            <span class="token-string">"type"</span>: <span class="token-string">"object"</span>,
+            <span class="token-string">"required"</span>: [<span class="token-string">"severity"</span>, <span class="token-string">"affected_service"</span>, <span class="token-string">"root_cause"</span>],
+            <span class="token-string">"properties"</span>: {
+                <span class="token-string">"severity"</span>:         {<span class="token-string">"type"</span>: <span class="token-string">"string"</span>, <span class="token-string">"enum"</span>: [<span class="token-string">"P1"</span>, <span class="token-string">"P2"</span>, <span class="token-string">"P3"</span>]},
+                <span class="token-string">"affected_service"</span>: {<span class="token-string">"type"</span>: <span class="token-string">"string"</span>},
+                <span class="token-string">"root_cause"</span>:      {<span class="token-string">"type"</span>: <span class="token-string">"string"</span>},
+                <span class="token-string">"remediation"</span>:     {<span class="token-string">"type"</span>: <span class="token-string">"string"</span>},
+                <span class="token-string">"recurrence_risk"</span>: {<span class="token-string">"type"</span>: <span class="token-string">"boolean"</span>}
+            }
+        }
+    }],
+    tool_choice={<span class="token-string">"type"</span>: <span class="token-string">"tool"</span>, <span class="token-string">"name"</span>: <span class="token-string">"save_incident_report"</span>},  <span class="token-comment"># forced</span>
+    messages=[{<span class="token-string">"role"</span>: <span class="token-string">"user"</span>, <span class="token-string">"content"</span>: log_text}]
+)
+
+<span class="token-comment"># stop_reason is always "tool_use" — safe to index directly</span>
+report = response.content[<span class="token-value">0</span>].input
+print(report[<span class="token-string">"severity"</span>])          <span class="token-comment"># "P1" | "P2" | "P3" — guaranteed by enum</span>
+print(report[<span class="token-string">"recurrence_risk"</span>])    <span class="token-comment"># True | False — guaranteed by type</span></code></pre>
+
+  <hr>
+
+  <!-- Validation & Retry -->
+  <h2 id="validation-retry">Validation &amp; Retry Loops</h2>
+  <p>
+    Even with tool schemas, extraction can fail when the source text doesn't contain the required information. The pattern: validate the output, and if it fails, send the error message back to Claude so it can correct itself.
+  </p>
+
+  <div class="diagram">  ┌─────────────┐
+  │  LLM call   │
+  └──────┬──────┘
+         │ block.input
+         ▼
+  ┌─────────────┐     PASS     ┌───────────┐
+  │  Validate   │ ───────────► │  Use data │
+  └──────┬──────┘              └───────────┘
+         │ FAIL
+         ▼
+  ┌──────────────────────────────────┐
+  │  Append error as tool_result     │
+  │  {"type":"tool_result",          │
+  │   "content": "severity missing"} │
+  └──────────────┬───────────────────┘
+                 │
+                 ▼
+          retry (max 3×)  ──► give up / raise</div>
+
+<pre><code><span class="token-kw">def</span> <span class="token-fn">extract_with_retry</span>(text: str, max_retries: int = <span class="token-value">3</span>) -> dict:
+    messages = [{<span class="token-string">"role"</span>: <span class="token-string">"user"</span>, <span class="token-string">"content"</span>: text}]
+
+    <span class="token-kw">for</span> attempt <span class="token-kw">in</span> range(max_retries):
+        response = client.messages.create(
+            model=<span class="token-string">"claude-opus-4-6"</span>,
+            tools=[REPORT_TOOL],
+            tool_choice={<span class="token-string">"type"</span>: <span class="token-string">"tool"</span>, <span class="token-string">"name"</span>: <span class="token-string">"save_incident_report"</span>},
+            messages=messages
+        )
+        data = response.content[<span class="token-value">0</span>].input
+
+        <span class="token-comment"># Validate beyond what JSON Schema can check</span>
+        errors = validate_report(data)
+        <span class="token-kw">if not</span> errors:
+            <span class="token-kw">return</span> data
+
+        <span class="token-comment"># Feed the error back — Claude will try to correct</span>
+        messages += [
+            {<span class="token-string">"role"</span>: <span class="token-string">"assistant"</span>, <span class="token-string">"content"</span>: response.content},
+            {<span class="token-string">"role"</span>: <span class="token-string">"user"</span>, <span class="token-string">"content"</span>: [{
+                <span class="token-string">"type"</span>: <span class="token-string">"tool_result"</span>,
+                <span class="token-string">"tool_use_id"</span>: response.content[<span class="token-value">0</span>].id,
+                <span class="token-string">"content"</span>: <span class="token-string">f"Validation failed: {errors}. Please correct and retry."</span>
+            }]}
+        ]
+
+    <span class="token-kw">raise</span> ValueError(<span class="token-string">f"Extraction failed after {max_retries} attempts"</span>)</code></pre>
+
+  <div class="callout warn">
+    <strong>When retries don't help.</strong> If the source text simply doesn't contain the required information, retrying just wastes tokens and latency. Before retrying, check: <em>is the information theoretically present in the input?</em> If not, return a partial result or raise a clear exception — don't loop.
+  </div>
+
+  <table>
+    <thead>
+      <tr><th>Failure type</th><th>Retry helps?</th><th>Better approach</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Wrong format (hallucinated field names)</td><td>Yes</td><td>Retry with error feedback</td></tr>
+      <tr><td>Information absent in source text</td><td>No</td><td>Return partial result, flag gap</td></tr>
+      <tr><td>Ambiguous input (two valid interpretations)</td><td>Sometimes</td><td>Ask for clarification first</td></tr>
+      <tr><td>Model confusion on complex schema</td><td>Yes</td><td>Simplify schema + retry</td></tr>
+    </tbody>
+  </table>
+
+  <hr>
+
+  <!-- Batch Processing -->
+  <h2 id="batch-processing">Batch Processing — Message Batches API</h2>
+  <p>
+    Every synchronous API call is billed at standard rates and competes for capacity. For workloads where latency doesn't matter — nightly report generation, bulk document processing, dataset annotation — the <strong>Message Batches API</strong> cuts cost by 50% at the expense of higher latency (results within 24 hours).
+  </p>
+
+  <div class="card-row" style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1.25rem 0">
+    <div class="card" style="padding:1.25rem;border:1px solid var(--green-border);border-radius:8px;background:var(--green-bg)">
+      <strong>Use batches when</strong>
+      <ul style="margin:.5rem 0 0 1rem;font-size:.9rem">
+        <li>Latency tolerance &gt; a few hours</li>
+        <li>Processing &gt; ~20 requests</li>
+        <li>Nightly ETL, bulk annotation</li>
+        <li>Evaluation runs on test sets</li>
+        <li>Cost is the binding constraint</li>
+      </ul>
+    </div>
+    <div class="card" style="padding:1.25rem;border:1px solid var(--warn-border);border-radius:8px;background:var(--warn-bg)">
+      <strong>Use synchronous when</strong>
+      <ul style="margin:.5rem 0 0 1rem;font-size:.9rem">
+        <li>User is waiting for a response</li>
+        <li>Real-time agent loops</li>
+        <li>Interactive tools / chat</li>
+        <li>Low request volume</li>
+        <li>Latency is the binding constraint</li>
+      </ul>
+    </div>
+  </div>
+
+<pre><code><span class="token-kw">import</span> anthropic
+
+client = anthropic.Anthropic()
+
+<span class="token-comment"># Submit up to 10,000 requests in one batch</span>
+batch = client.messages.batches.create(
+    requests=[
+        {
+            <span class="token-string">"custom_id"</span>: <span class="token-string">f"doc-{i}"</span>,
+            <span class="token-string">"params"</span>: {
+                <span class="token-string">"model"</span>: <span class="token-string">"claude-opus-4-6"</span>,
+                <span class="token-string">"max_tokens"</span>: <span class="token-value">512</span>,
+                <span class="token-string">"messages"</span>: [{<span class="token-string">"role"</span>: <span class="token-string">"user"</span>, <span class="token-string">"content"</span>: doc}]
+            }
+        }
+        <span class="token-kw">for</span> i, doc <span class="token-kw">in</span> enumerate(documents)
+    ]
+)
+print(batch.id)  <span class="token-comment"># msgbatch_01... — poll this later</span>
+
+<span class="token-comment"># Poll until complete (in a separate job / cron)</span>
+<span class="token-kw">while</span> <span class="token-value">True</span>:
+    batch = client.messages.batches.retrieve(batch.id)
+    <span class="token-kw">if</span> batch.processing_status == <span class="token-string">"ended"</span>:
+        <span class="token-kw">break</span>
+    time.sleep(<span class="token-value">60</span>)  <span class="token-comment"># check every minute</span>
+
+<span class="token-comment"># Stream results — one result per custom_id</span>
+<span class="token-kw">for</span> result <span class="token-kw">in</span> client.messages.batches.results(batch.id):
+    <span class="token-kw">if</span> result.result.type == <span class="token-string">"succeeded"</span>:
+        print(result.custom_id, result.result.message.content[<span class="token-value">0</span>].text)</code></pre>
+
+  <table>
+    <thead>
+      <tr><th></th><th>Synchronous API</th><th>Message Batches API</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Latency</td><td>Seconds</td><td>Up to 24 hours</td></tr>
+      <tr><td>Cost</td><td>Standard rate</td><td><strong>50% discount</strong></td></tr>
+      <tr><td>Max requests per batch</td><td>1</td><td>10,000</td></tr>
+      <tr><td>Result delivery</td><td>Inline response</td><td>Poll + stream</td></tr>
+      <tr><td>Best for</td><td>Interactive, real-time</td><td>Offline, bulk, eval</td></tr>
+    </tbody>
+  </table>
+
+  <hr>
+
+  <!-- Multi-Instance Review -->
+  <h2 id="multi-instance">Multi-Instance Review</h2>
+  <p>
+    When a single Claude instance reviews its own output, it tends to agree with itself — the same reasoning that produced the output also evaluates it. Running <strong>two independent instances</strong> — one to generate, one to review — catches errors the author misses.
+  </p>
+
+  <div class="diagram">  ┌─────────────────────────────────────────────────────────┐
+  │                    Orchestrator                         │
+  └──────────┬──────────────────────────┬──────────────────┘
+             │                          │
+             ▼                          ▼
+  ┌─────────────────────┐    ┌─────────────────────────┐
+  │   Author Instance   │    │   Reviewer Instance     │
+  │   (no prior output) │    │   (sees author output,  │
+  │                     │    │    NOT author reasoning)│
+  └──────────┬──────────┘    └───────────┬─────────────┘
+             │                           │
+             │   draft output            │  review verdict
+             └──────────────────────────►│
+                                         │
+                                         ▼
+                               ┌─────────────────┐
+                               │  approved /      │
+                               │  rejected+reason │
+                               └─────────────────┘</div>
+
+<pre><code><span class="token-kw">def</span> <span class="token-fn">independent_review</span>(task: str) -> dict:
+    <span class="token-comment"># Step 1: Author generates output (no self-evaluation)</span>
+    author_response = client.messages.create(
+        model=<span class="token-string">"claude-opus-4-6"</span>,
+        system=<span class="token-string">"You are an expert analyst. Perform the task thoroughly."</span>,
+        messages=[{<span class="token-string">"role"</span>: <span class="token-string">"user"</span>, <span class="token-string">"content"</span>: task}]
+    )
+    draft = author_response.content[<span class="token-value">0</span>].text
+
+    <span class="token-comment"># Step 2: Reviewer evaluates — sees draft, NOT the author's chain of thought</span>
+    reviewer_response = client.messages.create(
+        model=<span class="token-string">"claude-opus-4-6"</span>,
+        system=<span class="token-string">"""You are a critical reviewer. Your job is to find errors,
+gaps, and unsupported claims. Be skeptical. Do not assume correctness."""</span>,
+        messages=[{
+            <span class="token-string">"role"</span>: <span class="token-string">"user"</span>,
+            <span class="token-string">"content"</span>: <span class="token-string">f"Review this output for the task: {task}\n\nOutput to review:\n{draft}"</span>
+        }]
+    )
+
+    <span class="token-kw">return</span> {
+        <span class="token-string">"draft"</span>: draft,
+        <span class="token-string">"review"</span>: reviewer_response.content[<span class="token-value">0</span>].text
+    }</code></pre>
+
+  <div class="card-row" style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1.25rem 0">
+    <div class="card" style="padding:1.25rem;border:1px solid var(--green-border);border-radius:8px;background:var(--green-bg)">
+      <strong>Why independent beats self-review</strong>
+      <ul style="margin:.5rem 0 0 1rem;font-size:.9rem">
+        <li>Author has no cached reasoning to anchor on</li>
+        <li>Reviewer system prompt enforces skepticism</li>
+        <li>Two model calls = two independent samples</li>
+        <li>Catches hallucinations author "knows" are right</li>
+      </ul>
+    </div>
+    <div class="card" style="padding:1.25rem;border:1px solid var(--border);border-radius:8px">
+      <strong>Variations</strong>
+      <ul style="margin:.5rem 0 0 1rem;font-size:.9rem">
+        <li><strong>Blind review:</strong> reviewer never sees the task, only output</li>
+        <li><strong>Red team:</strong> reviewer actively tries to find failure modes</li>
+        <li><strong>Majority vote:</strong> N reviewers, accept if &gt;50% approve</li>
+        <li><strong>Adversarial:</strong> debate format — author defends, reviewer attacks</li>
+      </ul>
+    </div>
+  </div>
 
   <hr>
 
